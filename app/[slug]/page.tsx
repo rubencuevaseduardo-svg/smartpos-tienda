@@ -8,10 +8,10 @@ interface PageProps {
 
 async function getComerciante(slug: string): Promise<Comerciante | null> {
   const { data, error } = await supabase
-    .from('Comerciantes')
+    .from('comerciantes')
     .select('*')
     .eq('slug', slug)
-    .eq('Activo', true)
+    .eq('activo', true)
     .single()
   if (error || !data) return null
   return data
@@ -19,10 +19,10 @@ async function getComerciante(slug: string): Promise<Comerciante | null> {
 
 async function getProductos(comercianteId: string): Promise<Producto[]> {
   const { data, error } = await supabase
-    .from('Productos')
+    .from('productos')
     .select('*')
     .eq('comerciante_id', comercianteId)
-    .eq('Activo', true)
+    .eq('activo', true)
     .order('fecha_carga', { ascending: false })
   if (error || !data) return []
   return data
