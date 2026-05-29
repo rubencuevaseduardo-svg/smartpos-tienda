@@ -8,7 +8,7 @@ interface PageProps {
 
 async function getComerciante(slug: string): Promise<Comerciante | null> {
   const { data, error } = await supabase
-    .from('comerciantes')
+    .from('Comerciantes')
     .select('*')
     .eq('slug', slug)
     .eq('Activo', true)
@@ -19,7 +19,7 @@ async function getComerciante(slug: string): Promise<Comerciante | null> {
 
 async function getProductos(comercianteId: string): Promise<Producto[]> {
   const { data, error } = await supabase
-    .from('productos')
+    .from('Productos')
     .select('*')
     .eq('comerciante_id', comercianteId)
     .eq('Activo', true)
