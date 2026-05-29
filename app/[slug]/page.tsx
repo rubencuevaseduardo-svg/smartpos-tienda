@@ -11,7 +11,7 @@ async function getComerciante(slug: string): Promise<Comerciante | null> {
     .from('comerciantes')
     .select('*')
     .eq('slug', slug)
-    .eq('activo', true)
+    .eq('Activo', true)
     .single()
   if (error || !data) return null
   return data
@@ -22,7 +22,7 @@ async function getProductos(comercianteId: string): Promise<Producto[]> {
     .from('productos')
     .select('*')
     .eq('comerciante_id', comercianteId)
-    .eq('activo', true)
+    .eq('Activo', true)
     .order('fecha_carga', { ascending: false })
   if (error || !data) return []
   return data
