@@ -15,12 +15,12 @@ export type Comerciante = {
 
 export type Producto = {
   id: string
-  comerciante_id: string
-  nombre: string
-  precio: number
-  stock: number
-  foto_url: string
-  descripcion_ia: string
-  activo: boolean
-  fecha_carga: string
+  Comerciante_id: string
+  Nombre: string
+  Precio: number
+  Stock: number
+  Foto_url: string
+  'Descripción_ia': string
+  Activo: boolean
+  Fecha_carga: string
 }
