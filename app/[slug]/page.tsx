@@ -21,9 +21,9 @@ async function getProductos(comercianteId: string): Promise<Producto[]> {
   const { data, error } = await supabase
     .from('productos')
     .select('*')
-    .eq('comerciante_id', comercianteId)
-    .eq('activo', true)
-    .order('fecha_carga', { ascending: false })
+    .eq('Comerciante_id', comercianteId)
+    .eq('Activo', true)
+    .order('Fecha_carga', { ascending: false })
   if (error || !data) return []
   return data
 }
@@ -39,7 +39,7 @@ function formatPrecio(precio: number): string {
 function buildWhatsAppUrl(whatsapp: string, producto: Producto): string {
   const numero = whatsapp.replace(/\D/g, '')
   const mensaje = encodeURIComponent(
-    `Hola! Vi tu tienda online y me interesa el producto: *${producto.nombre}* (${formatPrecio(producto.precio)}). ¿Tenés disponibilidad?`
+    `Hola! Vi tu tienda online y me interesa el producto: *${producto.Nombre}* (${formatPrecio(producto.Precio)}). ¿Tenés disponibilidad?`
   )
   return `https://wa.me/${numero}?text=${mensaje}`
 }
@@ -120,16 +120,16 @@ function ProductoCard({
   whatsapp: string
 }) {
   const whatsappUrl = buildWhatsAppUrl(whatsapp, producto)
-  const sinStock = producto.stock === 0
+  const sinStock = producto.Stock === 0
 
   return (
     <div className={`bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col ${sinStock ? 'opacity-60' : ''}`}>
       {/* Imagen */}
       <div className="relative aspect-square bg-gray-100">
-        {producto.foto_url ? (
+        {producto.Foto_url ? (
           <Image
-            src={producto.foto_url}
-            alt={producto.nombre}
+            src={producto.Foto_url}
+            alt={producto.Nombre}
             fill
             className="object-cover"
             sizes="(max-width: 640px) 50vw, 300px"
@@ -146,10 +146,10 @@ function ProductoCard({
             </span>
           </div>
         )}
-        {producto.stock > 0 && producto.stock <= 3 && (
+        {producto.Stock > 0 && producto.Stock <= 3 && (
           <div className="absolute top-2 right-2">
             <span className="bg-amber-400 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              ¡Últimas {producto.stock}!
+              ¡Últimas {producto.Stock}!
             </span>
           </div>
         )}
@@ -159,27 +159,27 @@ function ProductoCard({
       <div className="p-3 flex flex-col flex-1 gap-2">
         <div>
           <h2 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">
-            {producto.nombre}
+            {producto.Nombre}
           </h2>
-          {producto.descripcion_ia && (
+          {producto['Descripción_ia'] && (
             <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
-              {producto.descripcion_ia}
+              {producto['Descripción_ia']}
             </p>
           )}
         </div>
 
         <div className="mt-auto">
           <p className="text-emerald-600 font-bold text-base">
-            {formatPrecio(producto.precio)}
+            {formatPrecio(producto.Precio)}
           </p>
           <p className="text-xs text-gray-400 mt-0.5">
-            {producto.stock > 0
-              ? `Stock: ${producto.stock} unid.`
+            {producto.Stock > 0
+              ? `Stock: ${producto.Stock} unid.`
               : 'Sin stock'}
           </p>
         </div>
 
-        <a
+        
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
