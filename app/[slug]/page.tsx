@@ -187,9 +187,7 @@ function ProductoCard({
     sinStock
       ? 'bg-gray-100 text-gray-400 pointer-events-none'
       : 'bg-emerald-500 text-white active:bg-emerald-600'
-  }`}
->
-  <WhatsAppIcon />
+  }`}><WhatsAppIcon />
   Consultar
 </a>
       </div>
