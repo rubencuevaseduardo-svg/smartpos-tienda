@@ -183,11 +183,9 @@ function ProductoCard({
           href={whatsappUrl}
   target="_blank"
   rel="noopener noreferrer"
-  className={`mt-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition-colors ${
-    sinStock
-      ? 'bg-gray-100 text-gray-400 pointer-events-none'
-      : 'bg-emerald-500 text-white active:bg-emerald-600'
-  }`}><WhatsAppIcon />
+  className={sinStock ? 'mt-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold bg-gray-100 text-gray-400 pointer-events-none' : 'mt-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold bg-emerald-500 text-white active:bg-emerald-600'}
+>
+  <WhatsAppIcon />
   Consultar
 </a>
       </div>
