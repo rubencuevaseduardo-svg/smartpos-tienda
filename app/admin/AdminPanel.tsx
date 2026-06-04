@@ -23,7 +23,20 @@ export default function AdminPanel({
     await supabase.auth.signOut()
     router.push('/admin/login')
   }
+async function handleSubirFoto(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('upload_preset', 'smartpos_unsigned')
+  formData.append('folder', 'smartpos/productos')
 
+  const res = await fetch('https://api.cloudinary.com/v1_1/dl2k77ebi/image/upload', {
+    method: 'POST',
+    body: formData,
+  })
+  const data = await res.json()
+  const url = data.secure_url.replace('/upload/', '/upload/ar_1.0,c_fill/')
+  setEditando(prev => prev ? { ...prev, Foto_url: url } : null)
+}
   async function handleGuardar() {
     if (!editando) return
     setLoading(true)
@@ -114,6 +127,26 @@ export default function AdminPanel({
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 px-4 pb-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
             <h2 className="font-bold text-gray-900">Editar producto</h2>
+            {/* Foto */}
+<div>
+  <label className="text-xs font-medium text-gray-600">Foto</label>
+  <div className="mt-1 flex items-center gap-3">
+    {editando.Foto_url && (
+      <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+        <Image src={editando.Foto_url} alt={editando.Nombre} fill className="object-cover" />
+      </div>
+    )}
+    <label className="cursor-pointer bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100">
+      {editando.Foto_url ? 'Cambiar foto' : 'Subir foto'}
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => e.target.files?.[0] && handleSubirFoto(e.target.files[0])}
+      />
+    </label>
+  </div>
+</div>
 
             <div>
               <label className="text-xs font-medium text-gray-600">Nombre</label>
