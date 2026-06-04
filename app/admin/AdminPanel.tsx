@@ -1,5 +1,6 @@
 'use client'
 
+import * as XLSX from 'xlsx'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
@@ -58,6 +59,35 @@ async function handleSubirFoto(file: File) {
     setLoading(false)
   }
 
+  function handleDescargarPlantilla() {
+  const plantilla = [
+    { Nombre: 'Ejemplo producto', Precio: 1000, Stock: 5, Descripcion: 'Descripción del producto' }
+  ]
+  const ws = XLSX.utils.json_to_sheet(plantilla)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Productos')
+  XLSX.writeFile(wb, 'plantilla_smartpos.xlsx')
+}
+
+async function handleImportar(file: File) {
+  const buffer = await file.arrayBuffer()
+  const wb = XLSX.read(buffer)
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const filas = XLSX.utils.sheet_to_json(ws) as any[]
+
+  for (const fila of filas) {
+    await supabase.from('productos').insert({
+      Comerciante_id: comerciante.id,
+      Nombre: fila.Nombre || fila.nombre || '',
+      Precio: parseFloat(fila.Precio || fila.precio || 0),
+      Stock: parseInt(fila.Stock || fila.stock || 1),
+      'Descripción_ia': fila.Descripcion || fila.descripcion || '',
+      Activo: true,
+    })
+  }
+
+  router.refresh()
+}
   async function handleEliminar(id: string) {
     if (!confirm('¿Eliminár este producto?')) return
     await supabase.from('productos').delete().eq('id', id)
@@ -83,9 +113,28 @@ async function handleSubirFoto(file: File) {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <p className="text-sm text-gray-500 mb-4">
-          {lista.length} {lista.length === 1 ? 'producto' : 'productos'}
-        </p>
+        <div className="flex items-center justify-between mb-4">
+  <p className="text-sm text-gray-500">
+    {lista.length} {lista.length === 1 ? 'producto' : 'productos'}
+  </p>
+  <div className="flex gap-2">
+    <button
+      onClick={handleDescargarPlantilla}
+      className="text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-medium text-gray-600"
+    >
+      Descargar plantilla
+    </button>
+    <label className="cursor-pointer text-xs bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5 font-medium text-emerald-600">
+      Importar Excel
+      <input
+        type="file"
+        accept=".xlsx,.csv"
+        className="hidden"
+        onChange={e => e.target.files?.[0] && handleImportar(e.target.files[0])}
+      />
+    </label>
+  </div>
+</div>
 
         <div className="flex flex-col gap-3">
           {lista.map((producto) => (
