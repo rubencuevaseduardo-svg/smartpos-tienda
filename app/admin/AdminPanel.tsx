@@ -17,6 +17,7 @@ export default function AdminPanel({
   const [lista, setLista] = useState<Producto[]>(productos)
   const [editando, setEditando] = useState<Producto | null>(null)
   const [loading, setLoading] = useState(false)
+  const [importando, setImportando] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -42,15 +43,16 @@ async function handleSubirFoto(file: File) {
     if (!editando) return
     setLoading(true)
     const { error } = await supabase
-      .from('productos')
-      .update({
-        Nombre: editando.Nombre,
-        Precio: editando.Precio,
-        Stock: editando.Stock,
-        'Descripción_ia': editando['Descripción_ia'],
-        Activo: editando.Activo,
-      })
-      .eq('id', editando.id)
+  .from('productos')
+  .update({
+    Nombre: editando.Nombre,
+    Precio: editando.Precio,
+    Stock: editando.Stock,
+    'Descripción_ia': editando['Descripción_ia'],
+    Activo: editando.Activo,
+    Foto_url: editando.Foto_url,
+  })
+  .eq('id', editando.id)
 
     if (!error) {
       setLista(lista.map(p => p.id === editando.id ? editando : p))
@@ -70,6 +72,7 @@ async function handleSubirFoto(file: File) {
 }
 
 async function handleImportar(file: File) {
+  setImportando(true)
   const buffer = await file.arrayBuffer()
   const wb = XLSX.read(buffer)
   const ws = wb.Sheets[wb.SheetNames[0]]
@@ -86,6 +89,7 @@ async function handleImportar(file: File) {
     })
   }
 
+  setImportando(false)
   router.refresh()
 }
   async function handleEliminar(id: string) {
@@ -124,15 +128,15 @@ async function handleImportar(file: File) {
     >
       Descargar plantilla
     </button>
-    <label className="cursor-pointer text-xs bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5 font-medium text-emerald-600">
-      Importar Excel
-      <input
-        type="file"
-        accept=".xlsx,.csv"
-        className="hidden"
-        onChange={e => e.target.files?.[0] && handleImportar(e.target.files[0])}
-      />
-    </label>
+   <label className={`cursor-pointer text-xs border rounded-xl px-3 py-1.5 font-medium ${importando ? 'bg-gray-100 text-gray-400 pointer-events-none' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}>
+  {importando ? 'Importando...' : 'Importar Excel'}
+  <input
+    type="file"
+    accept=".xlsx,.csv"
+    className="hidden"
+    onChange={e => e.target.files?.[0] && handleImportar(e.target.files[0])}
+  />
+</label>
   </div>
 </div>
 
