@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import POSPanel from './POSPanel'
 
 export default async function POSPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/admin/login')
