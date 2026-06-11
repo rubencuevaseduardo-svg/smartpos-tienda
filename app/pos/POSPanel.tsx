@@ -103,6 +103,23 @@ export default function POSPanel({
         nuevosStocks[item.id] = Math.max(0, stocks[item.id] - item.qty)
       })
       setStocks(nuevosStocks)
+
+      // Notificar a Make si hay productos agotados
+      const agotados = cartItems
+        .filter((item) => nuevosStocks[item.id] <= 0)
+        .map((item) => item.Nombre)
+
+      if (agotados.length > 0) {
+        const webhookUrl = 'https://hook.us2.make.com/fmmme3k7ifb0ycnv8woakw8q2bztqvv8'
+        if (webhookUrl) {
+          fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productos_agotados: agotados }),
+          }).catch(() => {})
+        }
+      }
+
       setVentaInfo({ items: totalItems, total: totalPrecio })
       setEstado('done')
     } catch {
