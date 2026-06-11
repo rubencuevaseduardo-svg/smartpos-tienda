@@ -35,7 +35,7 @@ export default function POSPanel({
   const productosFiltrados = useMemo(
     () =>
       productos.filter((p) =>
-        (p.Nombre ?? '').toLowerCase().includes(busqueda.toLowerCase())
+        p.Nombre.toLowerCase().includes(busqueda.toLowerCase())
       ),
     [productos, busqueda]
   )
