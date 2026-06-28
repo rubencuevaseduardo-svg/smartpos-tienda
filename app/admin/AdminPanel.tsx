@@ -18,41 +18,48 @@ export default function AdminPanel({
   const [editando, setEditando] = useState<Producto | null>(null)
   const [loading, setLoading] = useState(false)
   const [importando, setImportando] = useState(false)
+  const [busqueda, setBusqueda] = useState('')
   const router = useRouter()
   const supabase = createClient()
+
+  const listaFiltrada = lista.filter(p =>
+    (p.Nombre ?? '').toLowerCase().includes(busqueda.toLowerCase())
+  )
 
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/admin/login')
   }
-async function handleSubirFoto(file: File) {
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('upload_preset', 'smartpos_unsigned')
-  formData.append('folder', 'smartpos/productos')
 
-  const res = await fetch('https://api.cloudinary.com/v1_1/dl2k77ebi/image/upload', {
-    method: 'POST',
-    body: formData,
-  })
-  const data = await res.json()
-  const url = data.secure_url.replace('/upload/', '/upload/ar_1.0,c_fill/')
-  setEditando(prev => prev ? { ...prev, Foto_url: url } : null)
-}
+  async function handleSubirFoto(file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('upload_preset', 'smartpos_unsigned')
+    formData.append('folder', 'smartpos/productos')
+
+    const res = await fetch('https://api.cloudinary.com/v1_1/dl2k77ebi/image/upload', {
+      method: 'POST',
+      body: formData,
+    })
+    const data = await res.json()
+    const url = data.secure_url.replace('/upload/', '/upload/ar_1.0,c_fill/')
+    setEditando(prev => prev ? { ...prev, Foto_url: url } : null)
+  }
+
   async function handleGuardar() {
     if (!editando) return
     setLoading(true)
     const { error } = await supabase
-  .from('productos')
-  .update({
-    Nombre: editando.Nombre,
-    Precio: editando.Precio,
-    Stock: editando.Stock,
-    'Descripción_ia': editando['Descripción_ia'],
-    Activo: editando.Activo,
-    Foto_url: editando.Foto_url,
-  })
-  .eq('id', editando.id)
+      .from('productos')
+      .update({
+        Nombre: editando.Nombre,
+        Precio: editando.Precio,
+        Stock: editando.Stock,
+        'Descripción_ia': editando['Descripción_ia'],
+        Activo: editando.Activo,
+        Foto_url: editando.Foto_url,
+      })
+      .eq('id', editando.id)
 
     if (!error) {
       setLista(lista.map(p => p.id === editando.id ? editando : p))
@@ -62,36 +69,37 @@ async function handleSubirFoto(file: File) {
   }
 
   function handleDescargarPlantilla() {
-  const plantilla = [
-    { Nombre: 'Ejemplo producto', Precio: 1000, Stock: 5, Descripcion: 'Descripción del producto' }
-  ]
-  const ws = XLSX.utils.json_to_sheet(plantilla)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Productos')
-  XLSX.writeFile(wb, 'plantilla_smartpos.xlsx')
-}
-
-async function handleImportar(file: File) {
-  setImportando(true)
-  const buffer = await file.arrayBuffer()
-  const wb = XLSX.read(buffer)
-  const ws = wb.Sheets[wb.SheetNames[0]]
-  const filas = XLSX.utils.sheet_to_json(ws) as any[]
-
-  for (const fila of filas) {
-    await supabase.from('productos').insert({
-      Comerciante_id: comerciante.id,
-      Nombre: fila.Nombre || fila.nombre || '',
-      Precio: parseFloat(fila.Precio || fila.precio || 0),
-      Stock: parseInt(fila.Stock || fila.stock || 1),
-      'Descripción_ia': fila.Descripcion || fila.descripcion || '',
-      Activo: true,
-    })
+    const plantilla = [
+      { Nombre: 'Ejemplo producto', Precio: 1000, Stock: 5, Descripcion: 'Descripción del producto' }
+    ]
+    const ws = XLSX.utils.json_to_sheet(plantilla)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Productos')
+    XLSX.writeFile(wb, 'plantilla_smartpos.xlsx')
   }
 
-  setImportando(false)
-  router.refresh()
-}
+  async function handleImportar(file: File) {
+    setImportando(true)
+    const buffer = await file.arrayBuffer()
+    const wb = XLSX.read(buffer)
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const filas = XLSX.utils.sheet_to_json(ws) as any[]
+
+    for (const fila of filas) {
+      await supabase.from('productos').insert({
+        Comerciante_id: comerciante.id,
+        Nombre: fila.Nombre || fila.nombre || '',
+        Precio: parseFloat(fila.Precio || fila.precio || 0),
+        Stock: parseInt(fila.Stock || fila.stock || 1),
+        'Descripción_ia': fila.Descripcion || fila.descripcion || '',
+        Activo: true,
+      })
+    }
+
+    setImportando(false)
+    router.refresh()
+  }
+
   async function handleEliminar(id: string) {
     if (!confirm('¿Eliminár este producto?')) return
     await supabase.from('productos').delete().eq('id', id)
@@ -117,31 +125,40 @@ async function handleImportar(file: File) {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
+        {/* Buscador */}
+        <input
+          type="text"
+          placeholder="Buscar producto..."
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white mb-4"
+        />
+
         <div className="flex items-center justify-between mb-4">
-  <p className="text-sm text-gray-500">
-    {lista.length} {lista.length === 1 ? 'producto' : 'productos'}
-  </p>
-  <div className="flex gap-2">
-    <button
-      onClick={handleDescargarPlantilla}
-      className="text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-medium text-gray-600"
-    >
-      Descargar plantilla
-    </button>
-   <label className={`cursor-pointer text-xs border rounded-xl px-3 py-1.5 font-medium ${importando ? 'bg-gray-100 text-gray-400 pointer-events-none' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}>
-  {importando ? 'Importando...' : 'Importar Excel'}
-  <input
-    type="file"
-    accept=".xlsx,.csv"
-    className="hidden"
-    onChange={e => e.target.files?.[0] && handleImportar(e.target.files[0])}
-  />
-</label>
-  </div>
-</div>
+          <p className="text-sm text-gray-500">
+            {listaFiltrada.length} {listaFiltrada.length === 1 ? 'producto' : 'productos'}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleDescargarPlantilla}
+              className="text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-medium text-gray-600"
+            >
+              Descargar plantilla
+            </button>
+            <label className={`cursor-pointer text-xs border rounded-xl px-3 py-1.5 font-medium ${importando ? 'bg-gray-100 text-gray-400 pointer-events-none' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}>
+              {importando ? 'Importando...' : 'Importar Excel'}
+              <input
+                type="file"
+                accept=".xlsx,.csv"
+                className="hidden"
+                onChange={e => e.target.files?.[0] && handleImportar(e.target.files[0])}
+              />
+            </label>
+          </div>
+        </div>
 
         <div className="flex flex-col gap-3">
-          {lista.map((producto) => (
+          {listaFiltrada.map((producto) => (
             <div key={producto.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex gap-3">
               <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                 {producto.Foto_url ? (
@@ -181,25 +198,25 @@ async function handleImportar(file: File) {
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
             <h2 className="font-bold text-gray-900">Editar producto</h2>
             {/* Foto */}
-<div>
-  <label className="text-xs font-medium text-gray-600">Foto</label>
-  <div className="mt-1 flex items-center gap-3">
-    {editando.Foto_url && (
-      <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-        <Image src={editando.Foto_url} alt={editando.Nombre} fill className="object-cover" />
-      </div>
-    )}
-    <label className="cursor-pointer bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100">
-      {editando.Foto_url ? 'Cambiar foto' : 'Subir foto'}
-      <input
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={e => e.target.files?.[0] && handleSubirFoto(e.target.files[0])}
-      />
-    </label>
-  </div>
-</div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Foto</label>
+              <div className="mt-1 flex items-center gap-3">
+                {editando.Foto_url && (
+                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                    <Image src={editando.Foto_url} alt={editando.Nombre} fill className="object-cover" />
+                  </div>
+                )}
+                <label className="cursor-pointer bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100">
+                  {editando.Foto_url ? 'Cambiar foto' : 'Subir foto'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => e.target.files?.[0] && handleSubirFoto(e.target.files[0])}
+                  />
+                </label>
+              </div>
+            </div>
 
             <div>
               <label className="text-xs font-medium text-gray-600">Nombre</label>
