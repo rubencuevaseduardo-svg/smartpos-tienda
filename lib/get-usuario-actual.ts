@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Image from 'next/image'
-import { UsuarioActual } from '@/lib/get-usuario-actual'
 
 type Producto = {
   id: string
@@ -18,13 +17,11 @@ type CartItem = Producto & { qty: number }
 
 export default function POSPanel({
   productos,
-  usuarioActual,
+  comercianteNombre,
 }: {
   productos: Producto[]
-  usuarioActual: UsuarioActual
+  comercianteNombre: string
 }) {
-  const esAdmin = usuarioActual.rol === 'admin'
-
   const [cart, setCart] = useState<Record<string, CartItem>>({})
   const [stocks, setStocks] = useState<Record<string, number>>(
     Object.fromEntries(productos.map((p) => [p.id, p.Stock]))
@@ -100,12 +97,14 @@ export default function POSPanel({
         if (error) throw error
       }
 
+      // Actualizar stocks locales
       const nuevosStocks = { ...stocks }
       cartItems.forEach((item) => {
         nuevosStocks[item.id] = Math.max(0, stocks[item.id] - item.qty)
       })
       setStocks(nuevosStocks)
 
+      // Notificar a Make si hay productos agotados
       const agotados = cartItems
         .filter((item) => nuevosStocks[item.id] <= 0)
         .map((item) => item.Nombre)
@@ -214,55 +213,13 @@ export default function POSPanel({
             SmartPOS
           </span>
           <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>·</span>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-            {usuarioActual.comercianteNombre}
-          </span>
-          <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>·</span>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-            {usuarioActual.nombre}
-            {!esAdmin && <span style={{ color: 'var(--color-text-tertiary)' }}> (vendedor)</span>}
-          </span>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{comercianteNombre}</span>
         </div>
-
-        {/* Navegación por rol */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span
-            style={{
-              fontSize: 13, color: '#1D9E75', fontWeight: 500,
-              padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
-              background: '#E1F5EE',
-            }}>
-            Vender
-          </span>
-          <a
-            href="/admin"
-            style={{
-              fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
-              padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
-            }}>
-            Artículos
-          </a>
-          {esAdmin && (
-            <>
-              <a
-                href="/admin/reportes"
-                style={{
-                  fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
-                  padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
-                }}>
-                Reportes
-              </a>
-              <a
-                href="/admin/usuarios"
-                style={{
-                  fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
-                  padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
-                }}>
-                Usuarios
-              </a>
-            </>
-          )}
-        </div>
+        <a
+          href="/admin"
+          style={{ fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none' }}>
+          Panel admin →
+        </a>
       </div>
 
       {/* Contenido principal */}
