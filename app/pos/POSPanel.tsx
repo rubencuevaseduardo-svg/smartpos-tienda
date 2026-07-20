@@ -15,7 +15,19 @@ type Producto = {
 }
 
 type CartItem = Producto & { qty: number }
+type ItemVendido = {
+  nombre: string
+  qty: number
+  precio: number
+  subtotal: number
+}
 
+type InfoTicket = {
+  numeroTicket: number | null
+  fecha: Date
+  items: ItemVendido[]
+  total: number
+}
 export default function POSPanel({
   productos,
   usuarioActual,
@@ -31,7 +43,12 @@ export default function POSPanel({
   )
   const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [ventaInfo, setVentaInfo] = useState({ items: 0, total: 0 })
+  const [ventaInfo, setVentaInfo] = useState<InfoTicket>({
+    numeroTicket: null,
+    fecha: new Date(),
+    items: [],
+    total: 0,
+  })
 
   const supabase = createClient()
 
@@ -87,6 +104,12 @@ export default function POSPanel({
     setEstado('loading')
 
     try {
+      const { data: numeroTicket, error: errorTicket } = await supabase.rpc(
+        'siguiente_numero_ticket',
+        { p_comerciante_id: usuarioActual.comercianteId }
+      )
+      if (errorTicket) throw errorTicket
+
       for (const item of cartItems) {
         const nuevoStock = stocks[item.id] - item.qty
         const update: Record<string, unknown> = { Stock: nuevoStock }
@@ -106,6 +129,7 @@ export default function POSPanel({
         cantidad: item.qty,
         total: item.Precio * item.qty,
         canal: 'pos',
+        numero_ticket: numeroTicket,
       }))
 
       const { error: errorVentas } = await supabase
@@ -135,7 +159,17 @@ export default function POSPanel({
         }
       }
 
-      setVentaInfo({ items: totalItems, total: totalPrecio })
+      setVentaInfo({
+        numeroTicket,
+        fecha: new Date(),
+        items: cartItems.map((item) => ({
+          nombre: item.Nombre,
+          qty: item.qty,
+          precio: item.Precio,
+          subtotal: item.Precio * item.qty,
+        })),
+        total: totalPrecio,
+      })
       setEstado('done')
     } catch {
       setEstado('error')
@@ -153,55 +187,124 @@ export default function POSPanel({
 
   // Pantalla de confirmación
   if (estado === 'done') {
+    const fechaTexto = ventaInfo.fecha.toLocaleString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--color-background-tertiary)',
-      }}>
+      <>
+        <style>{`
+          @media print {
+            body * { visibility: hidden; }
+            .ticket-imprimible, .ticket-imprimible * { visibility: visible; }
+            .ticket-imprimible {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 80mm;
+            }
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+          }
+        `}</style>
+
         <div style={{
-          background: 'var(--color-background-primary)',
-          border: '0.5px solid var(--color-border-tertiary)',
-          borderRadius: 'var(--border-radius-lg)',
-          padding: '48px 40px',
-          textAlign: 'center',
-          maxWidth: 360,
-          width: '100%',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--color-background-tertiary)',
+          padding: 20,
         }}>
           <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            background: '#E1F5EE',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 20px',
+            background: 'var(--color-background-primary)',
+            border: '0.5px solid var(--color-border-tertiary)',
+            borderRadius: 'var(--border-radius-lg)',
+            padding: '32px 28px',
+            maxWidth: 360,
+            width: '100%',
           }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8 }}>
-            Venta registrada
-          </h1>
-          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-            {ventaInfo.items} {ventaInfo.items === 1 ? 'ítem' : 'ítems'} · {fmt(ventaInfo.total)}
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', marginBottom: 32 }}>
-            Stock actualizado en Supabase
-          </p>
-          <button
-            onClick={nuevaVenta}
-            style={{
-              width: '100%', padding: '11px',
-              background: '#1D9E75', color: '#E1F5EE',
-              border: 'none', borderRadius: 'var(--border-radius-md)',
-              fontSize: 15, fontWeight: 500, cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: '#E1F5EE',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
             }}>
-            Nueva venta
-          </button>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 20, textAlign: 'center' }}>
+              Venta registrada
+            </h1>
+
+            <div className="ticket-imprimible" style={{
+              fontFamily: 'monospace',
+              fontSize: 12,
+              color: '#000',
+              padding: '12px 4px',
+              borderTop: '1px dashed #999',
+              borderBottom: '1px dashed #999',
+              marginBottom: 20,
+            }}>
+              <div style={{ textAlign: 'center', fontWeight: 700, marginBottom: 4 }}>
+                {usuarioActual.comercianteNombre}
+              </div>
+              <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                Ticket #{ventaInfo.numeroTicket ?? '—'}
+                <br />
+                {fechaTexto}
+              </div>
+              <div style={{ borderTop: '1px dashed #999', margin: '6px 0' }} />
+              {ventaInfo.items.map((item, i) => (
+                <div key={i} style={{ marginBottom: 4 }}>
+                  <div>{item.nombre}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{item.qty} x {fmt(item.precio)}</span>
+                    <span>{fmt(item.subtotal)}</span>
+                  </div>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px dashed #999', margin: '6px 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 14 }}>
+                <span>TOTAL</span>
+                <span>{fmt(ventaInfo.total)}</span>
+              </div>
+              <div style={{ textAlign: 'center', marginTop: 10, fontSize: 10 }}>
+                Comprobante no válido como factura
+              </div>
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              style={{
+                width: '100%', padding: '11px', marginBottom: 10,
+                background: 'var(--color-background-secondary)',
+                color: 'var(--color-text-primary)',
+                border: '0.5px solid var(--color-border-secondary)',
+                borderRadius: 'var(--border-radius-md)',
+                fontSize: 15, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'var(--font-sans)',
+              }}>
+              Imprimir ticket
+            </button>
+            <button
+              onClick={nuevaVenta}
+              style={{
+                width: '100%', padding: '11px',
+                background: '#1D9E75', color: '#E1F5EE',
+                border: 'none', borderRadius: 'var(--border-radius-md)',
+                fontSize: 15, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'var(--font-sans)',
+              }}>
+              Nueva venta
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
