@@ -9,6 +9,19 @@ import Link from 'next/link'
 import { Producto } from '@/lib/supabase'
 import { UsuarioActual } from '@/lib/get-usuario-actual'
 
+const PRODUCTO_VACIO: Producto = {
+  id: '',
+  Comerciante_id: '',
+  Nombre: '',
+  Precio: 0,
+  Stock: 1,
+  Foto_url: '',
+  'Descripción_ia': '',
+  Activo: true,
+  Fecha_carga: '',
+  Categoria: null,
+}
+
 export default function AdminPanel({
   usuarioActual,
   productos,
@@ -20,6 +33,7 @@ export default function AdminPanel({
 
   const [lista, setLista] = useState<Producto[]>(productos)
   const [editando, setEditando] = useState<Producto | null>(null)
+  const [esNuevo, setEsNuevo] = useState(false)
   const [loading, setLoading] = useState(false)
   const [importando, setImportando] = useState(false)
   const [busqueda, setBusqueda] = useState('')
@@ -77,26 +91,56 @@ export default function AdminPanel({
     setEditando(prev => prev ? { ...prev, Foto_url: url } : null)
   }
 
+  function handleNuevoProducto() {
+    setEditando({ ...PRODUCTO_VACIO, Comerciante_id: usuarioActual.comercianteId })
+    setEsNuevo(true)
+  }
+
   async function handleGuardar() {
     if (!editando) return
     setLoading(true)
-    const { error } = await supabase
-      .from('productos')
-      .update({
-        Nombre: editando.Nombre,
-        Precio: editando.Precio,
-        Stock: editando.Stock,
-        'Descripción_ia': editando['Descripción_ia'],
-        Activo: editando.Activo,
-        Foto_url: editando.Foto_url,
-        Categoria: editando.Categoria ?? null,
-      })
-      .eq('id', editando.id)
 
-    if (!error) {
-      setLista(lista.map(p => p.id === editando.id ? editando : p))
-      setEditando(null)
+    if (esNuevo) {
+      const { data, error } = await supabase
+        .from('productos')
+        .insert({
+          Comerciante_id: usuarioActual.comercianteId,
+          Nombre: editando.Nombre,
+          Precio: editando.Precio,
+          Stock: editando.Stock,
+          'Descripción_ia': editando['Descripción_ia'],
+          Activo: editando.Activo,
+          Foto_url: editando.Foto_url,
+          Categoria: editando.Categoria ?? null,
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        setLista([data, ...lista])
+        setEditando(null)
+        setEsNuevo(false)
+      }
+    } else {
+      const { error } = await supabase
+        .from('productos')
+        .update({
+          Nombre: editando.Nombre,
+          Precio: editando.Precio,
+          Stock: editando.Stock,
+          'Descripción_ia': editando['Descripción_ia'],
+          Activo: editando.Activo,
+          Foto_url: editando.Foto_url,
+          Categoria: editando.Categoria ?? null,
+        })
+        .eq('id', editando.id)
+
+      if (!error) {
+        setLista(lista.map(p => p.id === editando.id ? editando : p))
+        setEditando(null)
+      }
     }
+
     setLoading(false)
   }
 
@@ -160,6 +204,11 @@ export default function AdminPanel({
     if (!confirm('¿Eliminár este producto?')) return
     await supabase.from('productos').delete().eq('id', id)
     setLista(lista.filter(p => p.id !== id))
+  }
+
+  function cerrarModal() {
+    setEditando(null)
+    setEsNuevo(false)
   }
 
   return (
@@ -276,7 +325,13 @@ export default function AdminPanel({
             {listaFiltrada.length} {listaFiltrada.length === 1 ? 'producto' : 'productos'}
           </p>
           {esAdmin && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap justify-end">
+              <button
+                onClick={handleNuevoProducto}
+                className="text-xs bg-emerald-500 text-white rounded-xl px-3 py-1.5 font-medium"
+              >
+                + Nuevo producto
+              </button>
               <button
                 onClick={handleDescargarPlantilla}
                 className="text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-medium text-gray-600"
@@ -362,7 +417,7 @@ export default function AdminPanel({
                   {esAdmin && (
                     <div className="flex gap-2 mt-2">
                       <button
-                        onClick={() => setEditando(producto)}
+                        onClick={() => { setEditando(producto); setEsNuevo(false) }}
                         className="text-xs bg-emerald-50 text-emerald-600 rounded-lg px-3 py-1 font-medium"
                       >
                         Editar
@@ -379,14 +434,22 @@ export default function AdminPanel({
               </div>
             )
           })}
+
+          {listaFiltrada.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-8">
+              No hay productos todavía{esAdmin ? ' — creá el primero con el botón de arriba' : ''}
+            </p>
+          )}
         </div>
       </main>
 
-      {/* Modal edición — solo admin puede llegar acá */}
+      {/* Modal crear/editar — solo admin puede llegar acá */}
       {editando && esAdmin && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 px-4 pb-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="font-bold text-gray-900">Editar producto</h2>
+            <h2 className="font-bold text-gray-900">
+              {esNuevo ? 'Nuevo producto' : 'Editar producto'}
+            </h2>
             <div>
               <label className="text-xs font-medium text-gray-600">Foto</label>
               <div className="mt-1 flex items-center gap-3">
@@ -412,6 +475,7 @@ export default function AdminPanel({
               <input
                 value={editando.Nombre}
                 onChange={e => setEditando({ ...editando, Nombre: e.target.value })}
+                placeholder="Ej: Zapatillas Nike talle 42"
                 className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500"
               />
             </div>
@@ -458,6 +522,7 @@ export default function AdminPanel({
                 value={editando['Descripción_ia'] ?? ''}
                 onChange={e => setEditando({ ...editando, 'Descripción_ia': e.target.value })}
                 rows={3}
+                placeholder={esNuevo ? 'Escribila vos, o dejala vacía y completala después' : ''}
                 className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 resize-none"
               />
             </div>
@@ -474,17 +539,17 @@ export default function AdminPanel({
 
             <div className="flex gap-2 mt-2">
               <button
-                onClick={() => setEditando(null)}
+                onClick={cerrarModal}
                 className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm font-medium text-gray-600"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleGuardar}
-                disabled={loading}
+                disabled={loading || !editando.Nombre}
                 className="flex-1 bg-emerald-500 text-white rounded-xl py-2.5 text-sm font-semibold disabled:opacity-50"
               >
-                {loading ? 'Guardando...' : 'Guardar'}
+                {loading ? 'Guardando...' : esNuevo ? 'Crear producto' : 'Guardar'}
               </button>
             </div>
           </div>
