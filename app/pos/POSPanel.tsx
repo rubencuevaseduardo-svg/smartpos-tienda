@@ -100,6 +100,20 @@ export default function POSPanel({
         if (error) throw error
       }
 
+      const ventasParaInsertar = cartItems.map((item) => ({
+        comerciante_id: usuarioActual.comercianteId,
+        producto_id: item.id,
+        cantidad: item.qty,
+        total: item.Precio * item.qty,
+        canal: 'pos',
+      }))
+
+      const { error: errorVentas } = await supabase
+        .from('ventas')
+        .insert(ventasParaInsertar)
+
+      if (errorVentas) throw errorVentas
+
       const nuevosStocks = { ...stocks }
       cartItems.forEach((item) => {
         nuevosStocks[item.id] = Math.max(0, stocks[item.id] - item.qty)
