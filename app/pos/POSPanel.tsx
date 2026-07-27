@@ -144,7 +144,6 @@ export default function POSPanel({
         .insert(movimientosParaInsertar)
 
       if (errorMovimientos) throw errorMovimientos
-      }
 
       const ventasParaInsertar = cartItems.map((item) => ({
         comerciante_id: usuarioActual.comercianteId,
