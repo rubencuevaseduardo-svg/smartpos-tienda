@@ -110,8 +110,14 @@ export default function POSPanel({
       )
       if (errorTicket) throw errorTicket
 
+      const { data: userData } = await supabase.auth.getUser()
+      const usuarioId = userData?.user?.id ?? null
+
+      const movimientosParaInsertar: Record<string, unknown>[] = []
+
       for (const item of cartItems) {
-        const nuevoStock = stocks[item.id] - item.qty
+        const stockAntes = stocks[item.id]
+        const nuevoStock = stockAntes - item.qty
         const update: Record<string, unknown> = { Stock: nuevoStock }
         if (nuevoStock <= 0) update.Activo = false
 
@@ -121,6 +127,23 @@ export default function POSPanel({
           .eq('id', item.id)
 
         if (error) throw error
+
+        movimientosParaInsertar.push({
+          comerciante_id: usuarioActual.comercianteId,
+          producto_id: item.id,
+          tipo: 'venta_pos',
+          cantidad: -item.qty,
+          stock_antes: stockAntes,
+          stock_despues: nuevoStock,
+          usuario_id: usuarioId,
+        })
+      }
+
+      const { error: errorMovimientos } = await supabase
+        .from('movimientos_stock')
+        .insert(movimientosParaInsertar)
+
+      if (errorMovimientos) throw errorMovimientos
       }
 
       const ventasParaInsertar = cartItems.map((item) => ({
