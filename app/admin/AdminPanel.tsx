@@ -290,6 +290,12 @@ export default function AdminPanel({
                 Reportes
               </Link>
               <Link
+                href="/admin/compras"
+                className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50"
+              >
+                Compras
+              </Link>
+              <Link
                 href="/admin/usuarios"
                 className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50"
               >

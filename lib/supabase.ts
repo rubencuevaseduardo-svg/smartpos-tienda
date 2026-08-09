@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
 export type Comerciante = {
   id: string
   nombre: string
@@ -9,6 +10,7 @@ export type Comerciante = {
   slug: string
   activo: boolean
 }
+
 export type Producto = {
   id: string
   Comerciante_id: string
@@ -20,4 +22,23 @@ export type Producto = {
   Activo: boolean
   Fecha_carga: string
   Categoria: string | null
+  costo_actual: number | null
+}
+
+export type Compra = {
+  id: string
+  comerciante_id: string
+  proveedor: string | null
+  fecha: string
+  total: number
+  usuario_id: string
+}
+
+export type CompraDetalle = {
+  id: string
+  compra_id: string
+  producto_id: string | null
+  cantidad: number
+  costo_unitario: number
+  subtotal: number
 }
