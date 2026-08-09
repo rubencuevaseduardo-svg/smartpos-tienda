@@ -206,30 +206,6 @@ export default function AdminPanel({
     await handleAjustarStock(modalAjuste.producto, modalAjuste.delta, motivoFinal)
     cerrarModalAjuste()
   }
-
-  function iniciarAjusteNegativo(producto: Producto) {
-    setModalAjuste({ producto, delta: -1 })
-    setMotivoSeleccionado('')
-    setMotivoLibre('')
-  }
-
-  function cerrarModalAjuste() {
-    setModalAjuste(null)
-    setMotivoSeleccionado('')
-    setMotivoLibre('')
-  }
-
-  async function confirmarAjusteConMotivo() {
-    if (!modalAjuste) return
-    const motivoFinal =
-      motivoSeleccionado === 'Otro'
-        ? motivoLibre.trim() || 'Otro'
-        : motivoSeleccionado
-    if (!motivoFinal) return
-    await handleAjustarStock(modalAjuste.producto, modalAjuste.delta, motivoFinal)
-    cerrarModalAjuste()
-  }
-
   function handleDescargarPlantilla() {
     const plantilla = [
       { Nombre: 'Ejemplo producto', Precio: 1000, Stock: 5, Descripcion: 'Descripción del producto', Categoria: 'General' }
