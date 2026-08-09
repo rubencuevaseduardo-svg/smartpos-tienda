@@ -20,6 +20,7 @@ const PRODUCTO_VACIO: Producto = {
   Activo: true,
   Fecha_carga: '',
   Categoria: null,
+  costo_actual: null,
 }
 
 export default function AdminPanel({
