@@ -297,6 +297,12 @@ export default function AdminPanel({
                 Compras
               </Link>
               <Link
+                href="/admin/conteo"
+                className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50"
+              >
+                Conteo
+              </Link>
+              <Link
                 href="/admin/usuarios"
                 className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50"
               >
