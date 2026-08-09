@@ -39,6 +39,9 @@ export default function AdminPanel({
   const [busqueda, setBusqueda] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('todas')
   const [ajustandoId, setAjustandoId] = useState<string | null>(null)
+  const [modalAjuste, setModalAjuste] = useState<{ producto: Producto; delta: number } | null>(null)
+  const [motivoSeleccionado, setMotivoSeleccionado] = useState('')
+  const [motivoLibre, setMotivoLibre] = useState('')
   const router = useRouter()
   const supabase = createClient()
 
@@ -144,7 +147,7 @@ export default function AdminPanel({
     setLoading(false)
   }
 
-  async function handleAjustarStock(producto: Producto, delta: number) {
+  async function handleAjustarStock(producto: Producto, delta: number, motivo: string | null = null) {
     const stockActual = producto.Stock ?? 0
     const nuevoStock = Math.max(0, stockActual + delta)
     if (nuevoStock === stockActual) return
@@ -163,8 +166,68 @@ export default function AdminPanel({
           p.id === producto.id ? { ...p, Stock: nuevoStock, Activo: nuevoActivo } : p
         )
       )
+
+      const { data: userData } = await supabase.auth.getUser()
+      const usuarioId = userData?.user?.id ?? null
+
+      await supabase.from('movimientos_stock').insert({
+        comerciante_id: usuarioActual.comercianteId,
+        producto_id: producto.id,
+        tipo: 'ajuste_manual',
+        cantidad: nuevoStock - stockActual,
+        stock_antes: stockActual,
+        stock_despues: nuevoStock,
+        usuario_id: usuarioId,
+        motivo,
+      })
     }
     setAjustandoId(null)
+  }
+
+  function iniciarAjusteNegativo(producto: Producto) {
+    setModalAjuste({ producto, delta: -1 })
+    setMotivoSeleccionado('')
+    setMotivoLibre('')
+  }
+
+  function cerrarModalAjuste() {
+    setModalAjuste(null)
+    setMotivoSeleccionado('')
+    setMotivoLibre('')
+  }
+
+  async function confirmarAjusteConMotivo() {
+    if (!modalAjuste) return
+    const motivoFinal =
+      motivoSeleccionado === 'Otro'
+        ? motivoLibre.trim() || 'Otro'
+        : motivoSeleccionado
+    if (!motivoFinal) return
+    await handleAjustarStock(modalAjuste.producto, modalAjuste.delta, motivoFinal)
+    cerrarModalAjuste()
+  }
+
+  function iniciarAjusteNegativo(producto: Producto) {
+    setModalAjuste({ producto, delta: -1 })
+    setMotivoSeleccionado('')
+    setMotivoLibre('')
+  }
+
+  function cerrarModalAjuste() {
+    setModalAjuste(null)
+    setMotivoSeleccionado('')
+    setMotivoLibre('')
+  }
+
+  async function confirmarAjusteConMotivo() {
+    if (!modalAjuste) return
+    const motivoFinal =
+      motivoSeleccionado === 'Otro'
+        ? motivoLibre.trim() || 'Otro'
+        : motivoSeleccionado
+    if (!motivoFinal) return
+    await handleAjustarStock(modalAjuste.producto, modalAjuste.delta, motivoFinal)
+    cerrarModalAjuste()
   }
 
   function handleDescargarPlantilla() {
@@ -380,7 +443,7 @@ export default function AdminPanel({
                     {esAdmin ? (
                       <>
                         <button
-                          onClick={() => handleAjustarStock(producto, -1)}
+                          onClick={() => iniciarAjusteNegativo(producto)}
                           disabled={ajustandoId === producto.id || stock <= 0}
                           className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-100 text-gray-600 text-sm font-bold disabled:opacity-30"
                         >
@@ -550,6 +613,60 @@ export default function AdminPanel({
                 className="flex-1 bg-emerald-500 text-white rounded-xl py-2.5 text-sm font-semibold disabled:opacity-50"
               >
                 {loading ? 'Guardando...' : esNuevo ? 'Crear producto' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {modalAjuste && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 px-4 pb-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <h2 className="font-bold text-gray-900">Motivo del ajuste</h2>
+            <p className="text-xs text-gray-500">
+              Vas a restar 1 unidad de{' '}
+              <span className="font-medium">{modalAjuste.producto.Nombre}</span>. Elegí un motivo antes de confirmar.
+            </p>
+            <div className="flex flex-col gap-2">
+              {[
+                'Rotura / vencimiento',
+                'Error de carga anterior',
+                'Uso interno / consumo propio del comercio',
+                'Pérdida o robo detectado',
+                'Otro',
+              ].map(opcion => (
+                <label key={opcion} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="motivo-ajuste"
+                    value={opcion}
+                    checked={motivoSeleccionado === opcion}
+                    onChange={e => setMotivoSeleccionado(e.target.value)}
+                  />
+                  {opcion}
+                </label>
+              ))}
+            </div>
+            {motivoSeleccionado === 'Otro' && (
+              <input
+                value={motivoLibre}
+                onChange={e => setMotivoLibre(e.target.value)}
+                placeholder="Describí el motivo (opcional)"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500"
+              />
+            )}
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={cerrarModalAjuste}
+                className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm font-medium text-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarAjusteConMotivo}
+                disabled={!motivoSeleccionado}
+                className="flex-1 bg-emerald-500 text-white rounded-xl py-2.5 text-sm font-semibold disabled:opacity-50"
+              >
+                Confirmar
               </button>
             </div>
           </div>
