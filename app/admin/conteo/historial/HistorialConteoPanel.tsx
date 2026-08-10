@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 
 type Conteo = {
@@ -36,9 +35,6 @@ export default function HistorialConteoPanel({
   detalles: Detalle[]
   mapaUsuarios: Record<string, string>
 }) {
-  const [abierto, setAbierto] = useState<string | null>(null)
-
-  // Orden cronológico ascendente para calcular tendencia (más viejo primero)
   const conteosCronologicos = [...conteos].reverse()
 
   function tendenciaVs(conteoId: string) {
@@ -70,8 +66,8 @@ export default function HistorialConteoPanel({
 
         <div className="flex flex-col gap-3">
           {conteos.map(conteo => {
-            const lineasDelConteo = detalles
-              .filter(d => d.conteo_id === conteo.id)
+            const lineasAjustadas = detalles
+              .filter(d => d.conteo_id === conteo.id && d.diferencia !== 0)
               .sort((a, b) => Math.abs(b.valor_diferencia) - Math.abs(a.valor_diferencia))
 
             const tendencia = tendenciaVs(conteo.id)
@@ -79,39 +75,34 @@ export default function HistorialConteoPanel({
 
             return (
               <div key={conteo.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <button
-                  onClick={() => setAbierto(abierto === conteo.id ? null : conteo.id)}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {new Date(conteo.fecha).toLocaleDateString('es-AR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                        })}
-                      </p>
-                      <p className="text-[11px] text-gray-500">
-                        {usuarioNombre} · {conteo.cantidad_productos_contados} productos
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold ${conteo.total_diferencia_valor < 0 ? 'text-red-500' : 'text-gray-900'}`}>
-                        ${conteo.total_diferencia_valor.toLocaleString('es-AR')}
-                      </p>
-                      {tendencia !== null && (
-                        <p className={`text-[10px] ${tendencia < 0 ? 'text-red-400' : 'text-emerald-500'}`}>
-                          {tendencia < 0 ? '↓' : '↑'} ${Math.abs(tendencia).toLocaleString('es-AR')} vs anterior
-                        </p>
-                      )}
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {new Date(conteo.fecha).toLocaleDateString('es-AR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      {usuarioNombre} · {conteo.cantidad_productos_contados} contados · {lineasAjustadas.length} con diferencia
+                    </p>
                   </div>
-                </button>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${conteo.total_diferencia_valor < 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                      ${conteo.total_diferencia_valor.toLocaleString('es-AR')}
+                    </p>
+                    {tendencia !== null && (
+                      <p className={`text-[10px] ${tendencia < 0 ? 'text-red-400' : 'text-emerald-500'}`}>
+                        {tendencia < 0 ? '↓' : '↑'} ${Math.abs(tendencia).toLocaleString('es-AR')} vs anterior
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-                {abierto === conteo.id && (
+                {lineasAjustadas.length > 0 ? (
                   <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
-                    {lineasDelConteo.map(linea => (
+                    {lineasAjustadas.map(linea => (
                       <div key={linea.id} className="flex items-center justify-between text-xs">
                         <span className="text-gray-700 truncate flex-1">{nombreProducto(linea)}</span>
                         <span className="text-gray-500 mx-2">
@@ -122,10 +113,11 @@ export default function HistorialConteoPanel({
                         </span>
                       </div>
                     ))}
-                    {lineasDelConteo.length === 0 && (
-                      <p className="text-xs text-gray-400">Sin diferencias registradas.</p>
-                    )}
                   </div>
+                ) : (
+                  <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">
+                    Sin diferencias — todo coincidió con el stock teórico.
+                  </p>
                 )}
               </div>
             )
