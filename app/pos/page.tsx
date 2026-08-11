@@ -13,10 +13,18 @@ export default async function POSPage() {
     .eq('Activo', true)
     .order('Nombre')
 
+  const { data: turnoAbierto } = await supabase
+    .from('turnos')
+    .select('*')
+    .eq('comerciante_id', usuarioActual.comercianteId)
+    .eq('estado', 'abierto')
+    .maybeSingle()
+
   return (
     <POSPanel
       productos={productos || []}
       usuarioActual={usuarioActual}
+      turnoInicial={turnoAbierto ?? null}
     />
   )
 }

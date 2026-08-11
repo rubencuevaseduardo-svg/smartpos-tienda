@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import type { UsuarioActual } from '@/lib/get-usuario-actual'
 import HistorialAjustesPanel from './HistorialAjustesPanel'
+import HistorialTurnosPanel from './HistorialTurnosPanel'
 
 type ProductoInfo = {
   id: string
@@ -56,7 +57,7 @@ export default function ReportesPanel({
 }) {
   const supabase = createClient()
 
-  const [tab, setTab] = useState<'ventas' | 'ajustes'>('ventas')
+  const [tab, setTab] = useState<'ventas' | 'ajustes' | 'turnos'>('ventas')
 
   const [desde, setDesde] = useState(haceDiasISO(30))
   const [hasta, setHasta] = useState(hoyISO())
@@ -161,6 +162,12 @@ export default function ReportesPanel({
           className={`px-4 py-2 rounded text-sm font-medium ${tab === 'ajustes' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}
         >
           Historial de ajustes
+        </button>
+        <button
+          onClick={() => setTab('turnos')}
+          className={`px-4 py-2 rounded text-sm font-medium ${tab === 'turnos' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}
+        >
+          Turnos
         </button>
       </div>
 
@@ -297,10 +304,17 @@ export default function ReportesPanel({
         </>
       )}
 
-      {tab === 'ajustes' && (
+{tab === 'ajustes' && (
         <HistorialAjustesPanel
           usuarioActual={usuarioActual}
           productos={productosIniciales}
+          mapaUsuarios={mapaUsuarios}
+        />
+      )}
+
+      {tab === 'turnos' && (
+        <HistorialTurnosPanel
+          usuarioActual={usuarioActual}
           mapaUsuarios={mapaUsuarios}
         />
       )}
