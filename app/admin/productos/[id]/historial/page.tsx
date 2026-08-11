@@ -1,9 +1,14 @@
 import { createClient } from '@/lib/supabase-server'
 import { getUsuarioActual } from '@/lib/get-usuario-actual'
-import { redirect } from 'next/navigation'
-import ReportesPanel from './ReportesPanel'
+import { redirect, notFound } from 'next/navigation'
+import HistorialProductoPanel from './HistorialProductoPanel'
 
-export default async function ReportesPage() {
+export default async function HistorialProductoPage({
+  params,
+}: {
+  params: { id: string }
+}) {
+  const { id } = params
   const usuarioActual = await getUsuarioActual()
 
   if (usuarioActual.rol !== 'admin') {
@@ -11,12 +16,23 @@ export default async function ReportesPage() {
   }
 
   const supabase = await createClient()
-  const { data: productos } = await supabase
-    .from('productos')
-    .select('id, Nombre, Stock, Categoria, Activo, Precio')
-    .eq('Comerciante_id', usuarioActual.comercianteId)
 
-  // Mapa usuario_id -> nombre, para mostrar quién hizo cada ajuste/movimiento
+  const { data: producto } = await supabase
+    .from('productos')
+    .select('id, Nombre, Stock, Precio, Foto_url')
+    .eq('id', id)
+    .eq('Comerciante_id', usuarioActual.comercianteId)
+    .maybeSingle()
+
+  if (!producto) notFound()
+
+  const { data: movimientos } = await supabase
+    .from('movimientos_stock')
+    .select('id, tipo, cantidad, stock_antes, stock_despues, usuario_id, motivo, fecha')
+    .eq('producto_id', id)
+    .eq('comerciante_id', usuarioActual.comercianteId)
+    .order('fecha', { ascending: false })
+
   const { data: comercianteInfo } = await supabase
     .from('comerciantes')
     .select('auth_user_id, nombre')
@@ -35,9 +51,9 @@ export default async function ReportesPage() {
   }
 
   return (
-    <ReportesPanel
-      usuarioActual={usuarioActual}
-      productosIniciales={productos || []}
+    <HistorialProductoPanel
+      producto={producto}
+      movimientos={movimientos ?? []}
       mapaUsuarios={mapaUsuarios}
     />
   )
