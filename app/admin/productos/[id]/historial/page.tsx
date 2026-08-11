@@ -6,9 +6,9 @@ import HistorialProductoPanel from './HistorialProductoPanel'
 export default async function HistorialProductoPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const { id } = params
+  const { id } = await params
   const usuarioActual = await getUsuarioActual()
 
   if (usuarioActual.rol !== 'admin') {
