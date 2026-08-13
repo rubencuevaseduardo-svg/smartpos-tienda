@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Image from 'next/image'
 import { UsuarioActual } from '@/lib/get-usuario-actual'
+import Link from 'next/link'
 
 type Producto = {
   id: string
@@ -426,13 +427,14 @@ export default function POSPanel({
           </button>
 
           
+           <Link
             href="/admin"
             style={{
               display: 'block', textAlign: 'center', marginTop: 14,
               fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
             }}>
             Volver al panel
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -620,31 +622,33 @@ export default function POSPanel({
             Vender
           </span>
           
+            <Link
             href="/admin"
             style={{
               fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
               padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
             }}>
             Artículos
-          </a>
+          </Link>
           {esAdmin && (
             <>
               
+                <Link
                 href="/admin/reportes"
                 style={{
                   fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
                   padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
                 }}>
                 Reportes
-              </a>
-              
+              </Link>
+              <Link
                 href="/admin/usuarios"
                 style={{
                   fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
                   padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
                 }}>
                 Usuarios
-              </a>
+              </Link>
             </>
           )}
         </div>
