@@ -127,7 +127,6 @@ export default function POSPanel({
         .single()
 
       if (error) {
-        // El índice único parcial rechaza si ya hay un turno abierto (carrera entre pestañas/usuarios)
         if (error.code === '23505') {
           throw new Error('Ya hay un turno abierto para este comercio. Recargá la página.')
         }
@@ -822,7 +821,6 @@ export default function POSPanel({
                   <div style={{ flex: 1, fontSize: 13, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
                     {item.Nombre}
                   </div>
-                  {/* Qty control */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <button
                       onClick={() => cambiarCantidad(item.id, -1)}
