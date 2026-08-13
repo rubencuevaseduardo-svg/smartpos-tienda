@@ -42,3 +42,23 @@ export type CompraDetalle = {
   costo_unitario: number
   subtotal: number
 }
+export type NotaCredito = {
+  id: string
+  comerciante_id: string
+  numero_ticket_original: number
+  numero_nota_credito: number
+  motivo: string
+  usuario_id: string
+  total: number
+  fecha: string
+}
+
+export type NotaCreditoDetalle = {
+  id: string
+  nota_credito_id: string
+  venta_id: string | null
+  producto_id: string | null
+  cantidad: number
+  precio_unitario: number
+  subtotal: number
+}
