@@ -630,6 +630,14 @@ export default function POSPanel({
             }}>
             Artículos
           </Link>
+          <Link
+            href="/admin/notas-credito"
+            style={{
+              fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
+              padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
+            }}>
+            Notas de crédito
+          </Link>
           {esAdmin && (
             <>
               
