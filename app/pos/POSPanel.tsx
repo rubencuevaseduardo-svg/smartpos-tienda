@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Image from 'next/image'
+import { UsuarioActual } from '@/lib/get-usuario-actual'
+import Link from 'next/link'
 
 type Producto = {
   id: string
@@ -13,24 +15,85 @@ type Producto = {
   Activo: boolean
 }
 
+type Turno = {
+  id: string
+  comerciante_id: string
+  usuario_apertura_id: string
+  usuario_cierre_id: string | null
+  fecha_apertura: string
+  fecha_cierre: string | null
+  efectivo_inicial: number
+  efectivo_esperado: number | null
+  efectivo_contado: number | null
+  diferencia: number | null
+  estado: 'abierto' | 'cerrado'
+}
+
 type CartItem = Producto & { qty: number }
+type ItemVendido = {
+  nombre: string
+  qty: number
+  precio: number
+  subtotal: number
+}
+type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia'
+type DescuentoTipo = 'porcentaje' | 'monto'
+
+type InfoTicket = {
+  numeroTicket: number | null
+  fecha: Date
+  items: ItemVendido[]
+  subtotal: number
+  descuento: number
+  total: number
+}
 
 export default function POSPanel({
   productos,
-  comercianteNombre,
+  usuarioActual,
+  turnoInicial,
 }: {
   productos: Producto[]
-  comercianteNombre: string
+  usuarioActual: UsuarioActual
+  turnoInicial: Turno | null
 }) {
+  const esAdmin = usuarioActual.rol === 'admin'
+  const supabase = createClient()
+
+  // --- Estado de turno ---
+  const [turno, setTurno] = useState<Turno | null>(turnoInicial)
+  const [efectivoInicialInput, setEfectivoInicialInput] = useState('')
+  const [abriendoTurno, setAbriendoTurno] = useState(false)
+  const [errorTurno, setErrorTurno] = useState<string | null>(null)
+
+  const [modalCierreAbierto, setModalCierreAbierto] = useState(false)
+  const [calculandoCierre, setCalculandoCierre] = useState(false)
+  const [efectivoEsperadoCalc, setEfectivoEsperadoCalc] = useState<number | null>(null)
+  const [efectivoContadoInput, setEfectivoContadoInput] = useState('')
+  const [cerrandoTurno, setCerrandoTurno] = useState(false)
+  const [errorCierre, setErrorCierre] = useState<string | null>(null)
+
+  // --- Estado del POS ---
   const [cart, setCart] = useState<Record<string, CartItem>>({})
   const [stocks, setStocks] = useState<Record<string, number>>(
     Object.fromEntries(productos.map((p) => [p.id, p.Stock]))
   )
   const [busqueda, setBusqueda] = useState('')
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
   const [estado, setEstado] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [ventaInfo, setVentaInfo] = useState({ items: 0, total: 0 })
+  const [ventaInfo, setVentaInfo] = useState<InfoTicket>({
+    numeroTicket: null,
+    fecha: new Date(),
+    items: [],
+    subtotal: 0,
+    descuento: 0,
+    total: 0,
+  })
 
-  const supabase = createClient()
+  // --- Estado del descuento manual (solo antes de cobrar, a nivel de ticket) ---
+  const [descuentoActivo, setDescuentoActivo] = useState(false)
+  const [descuentoTipo, setDescuentoTipo] = useState<DescuentoTipo>('monto')
+  const [descuentoValorInput, setDescuentoValorInput] = useState('')
 
   const productosFiltrados = useMemo(
     () =>
@@ -44,6 +107,135 @@ export default function POSPanel({
   const totalItems = cartItems.reduce((s, i) => s + i.qty, 0)
   const totalPrecio = cartItems.reduce((s, i) => s + i.Precio * i.qty, 0)
 
+  const descuentoValorNum = parseFloat(descuentoValorInput.replace(',', '.')) || 0
+  const descuentoMontoAplicado =
+    !descuentoActivo || descuentoValorNum <= 0
+      ? 0
+      : descuentoTipo === 'monto'
+        ? Math.min(descuentoValorNum, totalPrecio)
+        : Math.min((totalPrecio * descuentoValorNum) / 100, totalPrecio)
+  const totalConDescuento = Math.max(0, totalPrecio - descuentoMontoAplicado)
+
+  function fmt(n: number) {
+    return '$' + Math.round(n).toLocaleString('es-AR')
+  }
+
+  // --- Abrir turno ---
+  async function handleAbrirTurno() {
+    setErrorTurno(null)
+    const efectivoInicial = parseFloat(efectivoInicialInput)
+    if (isNaN(efectivoInicial) || efectivoInicial < 0) {
+      setErrorTurno('Ingresá un monto de fondo inicial válido.')
+      return
+    }
+
+    setAbriendoTurno(true)
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const usuarioId = userData?.user?.id
+      if (!usuarioId) throw new Error('No se pudo confirmar el usuario logueado.')
+
+      const { data, error } = await supabase
+        .from('turnos')
+        .insert({
+          comerciante_id: usuarioActual.comercianteId,
+          usuario_apertura_id: usuarioId,
+          efectivo_inicial: efectivoInicial,
+          estado: 'abierto',
+        })
+        .select()
+        .single()
+
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Ya hay un turno abierto para este comercio. Recargá la página.')
+        }
+        throw error
+      }
+
+      setTurno(data as Turno)
+      setEfectivoInicialInput('')
+    } catch (err: any) {
+      setErrorTurno(err.message ?? 'No se pudo abrir el turno.')
+    } finally {
+      setAbriendoTurno(false)
+    }
+  }
+
+  // --- Abrir modal de cierre + calcular efectivo esperado ---
+  async function abrirModalCierre() {
+    if (!turno) return
+    setModalCierreAbierto(true)
+    setErrorCierre(null)
+    setEfectivoContadoInput('')
+    setCalculandoCierre(true)
+
+    const { data, error } = await supabase
+      .from('ventas')
+      .select('total')
+      .eq('turno_id', turno.id)
+      .eq('metodo_pago', 'efectivo')
+
+    if (error) {
+      setErrorCierre('No se pudo calcular el efectivo esperado. Probá de nuevo.')
+      setCalculandoCierre(false)
+      return
+    }
+
+    const totalVentasEfectivo = (data ?? []).reduce((acc, v) => acc + (v.total ?? 0), 0)
+    setEfectivoEsperadoCalc(turno.efectivo_inicial + totalVentasEfectivo)
+    setCalculandoCierre(false)
+  }
+
+  function cerrarModalCierre() {
+    setModalCierreAbierto(false)
+    setEfectivoEsperadoCalc(null)
+    setEfectivoContadoInput('')
+    setErrorCierre(null)
+  }
+
+  async function handleCerrarTurno() {
+    if (!turno || efectivoEsperadoCalc === null) return
+    setErrorCierre(null)
+
+    const efectivoContado = parseFloat(efectivoContadoInput)
+    if (isNaN(efectivoContado) || efectivoContado < 0) {
+      setErrorCierre('Ingresá el efectivo contado.')
+      return
+    }
+
+    setCerrandoTurno(true)
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const usuarioId = userData?.user?.id
+      if (!usuarioId) throw new Error('No se pudo confirmar el usuario logueado.')
+
+      const diferencia = efectivoContado - efectivoEsperadoCalc
+
+      const { error } = await supabase
+        .from('turnos')
+        .update({
+          estado: 'cerrado',
+          fecha_cierre: new Date().toISOString(),
+          usuario_cierre_id: usuarioId,
+          efectivo_esperado: efectivoEsperadoCalc,
+          efectivo_contado: efectivoContado,
+          diferencia,
+        })
+        .eq('id', turno.id)
+
+      if (error) throw error
+
+      setTurno(null)
+      cerrarModalCierre()
+    } catch (err: any) {
+      setErrorCierre(err.message ?? 'No se pudo cerrar el turno.')
+    } finally {
+      setCerrandoTurno(false)
+    }
+  }
+
+  // --- Carrito ---
   function agregarAlCarrito(p: Producto) {
     if (stocks[p.id] === 0) return
     setCart((prev) => {
@@ -80,12 +272,24 @@ export default function POSPanel({
   }
 
   async function registrarVenta() {
-    if (cartItems.length === 0) return
+    if (cartItems.length === 0 || !turno) return
     setEstado('loading')
 
     try {
+      const { data: numeroTicket, error: errorTicket } = await supabase.rpc(
+        'siguiente_numero_ticket',
+        { p_comerciante_id: usuarioActual.comercianteId }
+      )
+      if (errorTicket) throw errorTicket
+
+      const { data: userData } = await supabase.auth.getUser()
+      const usuarioId = userData?.user?.id ?? null
+
+      const movimientosParaInsertar: Record<string, unknown>[] = []
+
       for (const item of cartItems) {
-        const nuevoStock = stocks[item.id] - item.qty
+        const stockAntes = stocks[item.id]
+        const nuevoStock = stockAntes - item.qty
         const update: Record<string, unknown> = { Stock: nuevoStock }
         if (nuevoStock <= 0) update.Activo = false
 
@@ -95,22 +299,61 @@ export default function POSPanel({
           .eq('id', item.id)
 
         if (error) throw error
+
+        movimientosParaInsertar.push({
+          comerciante_id: usuarioActual.comercianteId,
+          producto_id: item.id,
+          tipo: 'venta_pos',
+          cantidad: -item.qty,
+          stock_antes: stockAntes,
+          stock_despues: nuevoStock,
+          usuario_id: usuarioId,
+          numero_ticket: numeroTicket,
+        })
       }
 
-      // Actualizar stocks locales
+      const { error: errorMovimientos } = await supabase
+        .from('movimientos_stock')
+        .insert(movimientosParaInsertar)
+
+      if (errorMovimientos) throw errorMovimientos
+
+      const ventasParaInsertar = cartItems.map((item, idx) => ({
+        comerciante_id: usuarioActual.comercianteId,
+        producto_id: item.id,
+        cantidad: item.qty,
+        total: item.Precio * item.qty,
+        canal: 'pos',
+        numero_ticket: numeroTicket,
+        metodo_pago: metodoPago,
+        turno_id: turno.id,
+        ...(idx === 0 && descuentoMontoAplicado > 0
+          ? {
+              descuento_tipo: descuentoTipo,
+              descuento_valor: descuentoValorNum,
+              descuento_monto_aplicado: descuentoMontoAplicado,
+            }
+          : {}),
+      }))
+
+      const { error: errorVentas } = await supabase
+        .from('ventas')
+        .insert(ventasParaInsertar)
+
+      if (errorVentas) throw errorVentas
+
       const nuevosStocks = { ...stocks }
       cartItems.forEach((item) => {
         nuevosStocks[item.id] = Math.max(0, stocks[item.id] - item.qty)
       })
       setStocks(nuevosStocks)
 
-      // Notificar a Make si hay productos agotados
       const agotados = cartItems
         .filter((item) => nuevosStocks[item.id] <= 0)
         .map((item) => item.Nombre)
 
       if (agotados.length > 0) {
-        const webhookUrl = process.env.NEXT_PUBLIC_MAKE_WEBHOOK_STOCK
+        const webhookUrl = 'https://hook.us2.make.com/fmmme3k7ifb0ycnv8woakw8q2bztqvv8'
         if (webhookUrl) {
           fetch(webhookUrl, {
             method: 'POST',
@@ -120,7 +363,19 @@ export default function POSPanel({
         }
       }
 
-      setVentaInfo({ items: totalItems, total: totalPrecio })
+      setVentaInfo({
+        numeroTicket,
+        fecha: new Date(),
+        items: cartItems.map((item) => ({
+          nombre: item.Nombre,
+          qty: item.qty,
+          precio: item.Precio,
+          subtotal: item.Precio * item.qty,
+        })),
+        subtotal: totalPrecio,
+        descuento: descuentoMontoAplicado,
+        total: totalConDescuento,
+      })
       setEstado('done')
     } catch {
       setEstado('error')
@@ -129,15 +384,15 @@ export default function POSPanel({
 
   function nuevaVenta() {
     setCart({})
+    setMetodoPago('efectivo')
+    setDescuentoActivo(false)
+    setDescuentoTipo('monto')
+    setDescuentoValorInput('')
     setEstado('idle')
   }
 
-  function fmt(n: number) {
-    return '$' + Math.round(n).toLocaleString('es-AR')
-  }
-
-  // Pantalla de confirmación
-  if (estado === 'done') {
+  // --- Pantalla bloqueante: no hay turno abierto ---
+  if (!turno) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -145,50 +400,214 @@ export default function POSPanel({
         alignItems: 'center',
         justifyContent: 'center',
         background: 'var(--color-background-tertiary)',
+        padding: 20,
       }}>
         <div style={{
           background: 'var(--color-background-primary)',
           border: '0.5px solid var(--color-border-tertiary)',
           borderRadius: 'var(--border-radius-lg)',
-          padding: '48px 40px',
-          textAlign: 'center',
+          padding: '32px 28px',
           maxWidth: 360,
           width: '100%',
         }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            background: '#E1F5EE',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 20px',
-          }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8 }}>
-            Venta registrada
+          <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 6, textAlign: 'center' }}>
+            Abrir turno
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-            {ventaInfo.items} {ventaInfo.items === 1 ? 'ítem' : 'ítems'} · {fmt(ventaInfo.total)}
+          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', marginBottom: 20, textAlign: 'center' }}>
+            {usuarioActual.comercianteNombre} · {usuarioActual.nombre}
+            <br />
+            Necesitás abrir un turno antes de poder vender.
           </p>
-          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', marginBottom: 32 }}>
-            Stock actualizado en Supabase
-          </p>
+
+          <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+            Fondo inicial (efectivo en caja)
+          </label>
+          <input
+            type="number"
+            min={0}
+            value={efectivoInicialInput}
+            onChange={(e) => setEfectivoInicialInput(e.target.value)}
+            placeholder="0"
+            style={{
+              width: '100%', marginTop: 6, marginBottom: 12,
+              padding: '10px 12px',
+              border: '0.5px solid var(--color-border-secondary)',
+              borderRadius: 'var(--border-radius-md)',
+              fontSize: 14, fontFamily: 'var(--font-sans)',
+              color: 'var(--color-text-primary)',
+              outline: 'none',
+            }}
+          />
+
+          {errorTurno && (
+            <div style={{ fontSize: 13, color: '#E24B4A', marginBottom: 12 }}>{errorTurno}</div>
+          )}
+
           <button
-            onClick={nuevaVenta}
+            onClick={handleAbrirTurno}
+            disabled={abriendoTurno}
             style={{
               width: '100%', padding: '11px',
               background: '#1D9E75', color: '#E1F5EE',
               border: 'none', borderRadius: 'var(--border-radius-md)',
-              fontSize: 15, fontWeight: 500, cursor: 'pointer',
+              fontSize: 15, fontWeight: 500,
+              cursor: abriendoTurno ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-sans)',
+              opacity: abriendoTurno ? 0.6 : 1,
             }}>
-            Nueva venta
+            {abriendoTurno ? 'Abriendo...' : 'Abrir turno y empezar a vender'}
           </button>
+
+          
+           <Link
+            href="/admin"
+            style={{
+              display: 'block', textAlign: 'center', marginTop: 14,
+              fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
+            }}>
+            Volver al panel
+          </Link>
         </div>
       </div>
     )
   }
+
+  // --- Pantalla de confirmación de venta ---
+  if (estado === 'done') {
+    const fechaTexto = ventaInfo.fecha.toLocaleString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+
+    return (
+      <>
+        <style>{`
+          @media print {
+            body * { visibility: hidden; }
+            .ticket-imprimible, .ticket-imprimible * { visibility: visible; }
+            .ticket-imprimible {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 80mm;
+            }
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+          }
+        `}</style>
+
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--color-background-tertiary)',
+          padding: 20,
+        }}>
+          <div style={{
+            background: 'var(--color-background-primary)',
+            border: '0.5px solid var(--color-border-tertiary)',
+            borderRadius: 'var(--border-radius-lg)',
+            padding: '32px 28px',
+            maxWidth: 360,
+            width: '100%',
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: '#E1F5EE',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 20, textAlign: 'center' }}>
+              Venta registrada
+            </h1>
+
+            <div className="ticket-imprimible" style={{
+              fontFamily: 'monospace',
+              fontSize: 12,
+              color: '#000',
+              padding: '12px 4px',
+              borderTop: '1px dashed #999',
+              borderBottom: '1px dashed #999',
+              marginBottom: 20,
+            }}>
+              <div style={{ textAlign: 'center', fontWeight: 700, marginBottom: 4 }}>
+                {usuarioActual.comercianteNombre}
+              </div>
+              <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                Ticket #{ventaInfo.numeroTicket ?? '—'}
+                <br />
+                {fechaTexto}
+              </div>
+              <div style={{ borderTop: '1px dashed #999', margin: '6px 0' }} />
+              {ventaInfo.items.map((item, i) => (
+                <div key={i} style={{ marginBottom: 4 }}>
+                  <div>{item.nombre}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{item.qty} x {fmt(item.precio)}</span>
+                    <span>{fmt(item.subtotal)}</span>
+                  </div>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px dashed #999', margin: '6px 0' }} />
+              {ventaInfo.descuento > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Subtotal</span>
+                    <span>{fmt(ventaInfo.subtotal)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Descuento</span>
+                    <span>-{fmt(ventaInfo.descuento)}</span>
+                  </div>
+                </>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 14 }}>
+                <span>TOTAL</span>
+                <span>{fmt(ventaInfo.total)}</span>
+              </div>
+              <div style={{ textAlign: 'center', marginTop: 10, fontSize: 10 }}>
+                Comprobante no válido como factura
+              </div>
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              style={{
+                width: '100%', padding: '11px', marginBottom: 10,
+                background: 'var(--color-background-secondary)',
+                color: 'var(--color-text-primary)',
+                border: '0.5px solid var(--color-border-secondary)',
+                borderRadius: 'var(--border-radius-md)',
+                fontSize: 15, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'var(--font-sans)',
+              }}>
+              Imprimir ticket
+            </button>
+            <button
+              onClick={nuevaVenta}
+              style={{
+                width: '100%', padding: '11px',
+                background: '#1D9E75', color: '#E1F5EE',
+                border: 'none', borderRadius: 'var(--border-radius-md)',
+                fontSize: 15, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'var(--font-sans)',
+              }}>
+              Nueva venta
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  const horaApertura = new Date(turno.fecha_apertura).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 
   return (
     <div style={{
@@ -213,13 +632,78 @@ export default function POSPanel({
             SmartPOS
           </span>
           <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>·</span>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{comercianteNombre}</span>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+            {usuarioActual.comercianteNombre}
+          </span>
+          <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>·</span>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+            {usuarioActual.nombre}
+            {!esAdmin && <span style={{ color: 'var(--color-text-tertiary)' }}> (vendedor)</span>}
+          </span>
+          <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>·</span>
+          <span style={{ fontSize: 12, color: '#1D9E75' }}>
+            Turno desde {horaApertura}
+          </span>
+          <button
+            onClick={abrirModalCierre}
+            style={{
+              fontSize: 12, color: '#E24B4A', background: 'none',
+              border: '0.5px solid #E24B4A', borderRadius: 'var(--border-radius-md)',
+              padding: '3px 8px', cursor: 'pointer', fontFamily: 'var(--font-sans)',
+            }}>
+            Cerrar turno
+          </button>
         </div>
-        <a
-          href="/admin"
-          style={{ fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none' }}>
-          Panel admin →
-        </a>
+
+        {/* Navegación por rol */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span
+            style={{
+              fontSize: 13, color: '#1D9E75', fontWeight: 500,
+              padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
+              background: '#E1F5EE',
+            }}>
+            Vender
+          </span>
+          
+            <Link
+            href="/admin"
+            style={{
+              fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
+              padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
+            }}>
+            Artículos
+          </Link>
+          <Link
+            href="/admin/notas-credito"
+            style={{
+              fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
+              padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
+            }}>
+            Notas de crédito
+          </Link>
+          {esAdmin && (
+            <>
+              
+                <Link
+                href="/admin/reportes"
+                style={{
+                  fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
+                  padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
+                }}>
+                Reportes
+              </Link>
+              <Link
+                href="/admin/usuarios"
+                style={{
+                  fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'none',
+                  padding: '6px 10px', borderRadius: 'var(--border-radius-md)',
+                }}>
+                Usuarios
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Contenido principal */}
@@ -393,7 +877,6 @@ export default function POSPanel({
                   <div style={{ flex: 1, fontSize: 13, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
                     {item.Nombre}
                   </div>
-                  {/* Qty control */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <button
                       onClick={() => cambiarCantidad(item.id, -1)}
@@ -458,10 +941,103 @@ export default function POSPanel({
                 Error al guardar. Intentá de nuevo.
               </div>
             )}
+
+            {cartItems.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+                  Método de pago
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['efectivo', 'tarjeta', 'transferencia'] as MetodoPago[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMetodoPago(m)}
+                      style={{
+                        flex: 1, padding: '6px 4px',
+                        fontSize: 12, fontWeight: 500,
+                        borderRadius: 'var(--border-radius-md)',
+                        border: metodoPago === m ? '0.5px solid #1D9E75' : '0.5px solid var(--color-border-secondary)',
+                        background: metodoPago === m ? '#E1F5EE' : 'var(--color-background-secondary)',
+                        color: metodoPago === m ? '#1D9E75' : 'var(--color-text-secondary)',
+                        cursor: 'pointer', fontFamily: 'var(--font-sans)',
+                        textTransform: 'capitalize',
+                      }}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {cartItems.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <button
+                  onClick={() => {
+                    setDescuentoActivo((v) => !v)
+                    if (descuentoActivo) setDescuentoValorInput('')
+                  }}
+                  style={{
+                    fontSize: 12, fontWeight: 500,
+                    color: descuentoActivo ? '#E24B4A' : 'var(--color-text-secondary)',
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: 'pointer', fontFamily: 'var(--font-sans)',
+                  }}>
+                  {descuentoActivo ? '– Quitar descuento' : '+ Agregar descuento'}
+                </button>
+
+                {descuentoActivo && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <div style={{ display: 'flex', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden' }}>
+                      {(['monto', 'porcentaje'] as DescuentoTipo[]).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setDescuentoTipo(t)}
+                          style={{
+                            padding: '6px 12px', fontSize: 13, fontWeight: 500,
+                            border: 'none',
+                            background: descuentoTipo === t ? '#1D9E75' : 'var(--color-background-secondary)',
+                            color: descuentoTipo === t ? '#E1F5EE' : 'var(--color-text-secondary)',
+                            cursor: 'pointer', fontFamily: 'var(--font-sans)',
+                          }}>
+                          {t === 'monto' ? '$' : '%'}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={descuentoValorInput}
+                      onChange={(e) => setDescuentoValorInput(e.target.value)}
+                      placeholder={descuentoTipo === 'monto' ? 'Monto a descontar' : 'Porcentaje'}
+                      style={{
+                        flex: 1, padding: '6px 10px', fontSize: 13,
+                        border: '0.5px solid var(--color-border-secondary)',
+                        borderRadius: 'var(--border-radius-md)',
+                        fontFamily: 'var(--font-sans)',
+                        color: 'var(--color-text-primary)',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {descuentoMontoAplicado > 0 && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  <span>Subtotal</span>
+                  <span>{fmt(totalPrecio)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#E24B4A', marginBottom: 4 }}>
+                  <span>Descuento</span>
+                  <span>-{fmt(descuentoMontoAplicado)}</span>
+                </div>
+              </>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
               <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Total</span>
               <span style={{ fontSize: 22, fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                {fmt(totalPrecio)}
+                {fmt(totalConDescuento)}
               </span>
             </div>
             <button
@@ -481,6 +1057,93 @@ export default function POSPanel({
           </div>
         </div>
       </div>
+
+      {/* Modal de cierre de turno */}
+      {modalCierreAbierto && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 50, padding: 20,
+        }}>
+          <div style={{
+            background: 'var(--color-background-primary)',
+            borderRadius: 'var(--border-radius-lg)',
+            padding: '28px 24px',
+            maxWidth: 360, width: '100%',
+          }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 16 }}>
+              Cerrar turno
+            </h2>
+
+            {calculandoCierre ? (
+              <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>Calculando efectivo esperado...</p>
+            ) : (
+              <>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  Fondo inicial: {fmt(turno.efectivo_inicial)}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 16 }}>
+                  Efectivo esperado (fondo + ventas en efectivo): <strong>{fmt(efectivoEsperadoCalc ?? 0)}</strong>
+                </div>
+
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                  Efectivo contado en caja
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={efectivoContadoInput}
+                  onChange={(e) => setEfectivoContadoInput(e.target.value)}
+                  placeholder="0"
+                  style={{
+                    width: '100%', marginTop: 6, marginBottom: 12,
+                    padding: '10px 12px',
+                    border: '0.5px solid var(--color-border-secondary)',
+                    borderRadius: 'var(--border-radius-md)',
+                    fontSize: 14, fontFamily: 'var(--font-sans)',
+                    color: 'var(--color-text-primary)',
+                    outline: 'none',
+                  }}
+                />
+
+                {errorCierre && (
+                  <div style={{ fontSize: 13, color: '#E24B4A', marginBottom: 12 }}>{errorCierre}</div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={cerrarModalCierre}
+                    style={{
+                      flex: 1, padding: '10px',
+                      border: '0.5px solid var(--color-border-secondary)',
+                      borderRadius: 'var(--border-radius-md)',
+                      background: 'var(--color-background-secondary)',
+                      color: 'var(--color-text-primary)',
+                      fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                      fontFamily: 'var(--font-sans)',
+                    }}>
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCerrarTurno}
+                    disabled={cerrandoTurno}
+                    style={{
+                      flex: 1, padding: '10px',
+                      border: 'none', borderRadius: 'var(--border-radius-md)',
+                      background: '#1D9E75', color: '#E1F5EE',
+                      fontSize: 14, fontWeight: 500,
+                      cursor: cerrandoTurno ? 'not-allowed' : 'pointer',
+                      fontFamily: 'var(--font-sans)',
+                      opacity: cerrandoTurno ? 0.6 : 1,
+                    }}>
+                    {cerrandoTurno ? 'Cerrando...' : 'Confirmar cierre'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
