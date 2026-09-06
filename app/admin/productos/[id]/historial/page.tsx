@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase-server'
 import { getUsuarioActual } from '@/lib/get-usuario-actual'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import HistorialProductoPanel from './HistorialProductoPanel'
 
 export default async function HistorialProductoPage({
@@ -10,10 +10,6 @@ export default async function HistorialProductoPage({
 }) {
   const { id } = await params
   const usuarioActual = await getUsuarioActual()
-
-  if (usuarioActual.rol !== 'admin') {
-    redirect('/admin')
-  }
 
   const supabase = await createClient()
 
@@ -28,7 +24,7 @@ export default async function HistorialProductoPage({
 
   const { data: movimientos } = await supabase
     .from('movimientos_stock')
-    .select('id, tipo, cantidad, stock_antes, stock_despues, usuario_id, motivo, fecha')
+    .select('id, tipo, cantidad, stock_antes, stock_despues, usuario_id, motivo, fecha, numero_ticket')
     .eq('producto_id', id)
     .eq('comerciante_id', usuarioActual.comercianteId)
     .order('fecha', { ascending: false })

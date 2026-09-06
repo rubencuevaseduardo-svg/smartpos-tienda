@@ -20,6 +20,7 @@ type Movimiento = {
   usuario_id: string
   motivo: string | null
   fecha: string
+  numero_ticket: number | null
 }
 
 const ETIQUETAS_TIPO: Record<string, string> = {
@@ -30,7 +31,10 @@ const ETIQUETAS_TIPO: Record<string, string> = {
   ajuste_manual: 'Ajuste manual',
   conteo_fisico: 'Conteo físico',
   devolucion: 'Devolución',
+  anulacion: 'Anulación',
 }
+
+const TIPOS_CON_LINK_A_VENTA = new Set(['venta_pos', 'venta_whatsapp', 'anulacion'])
 
 export default function HistorialProductoPanel({
   producto,
@@ -111,6 +115,14 @@ export default function HistorialProductoPanel({
               </p>
               {m.motivo && (
                 <p className="text-xs text-gray-600 mt-1">Motivo: {m.motivo}</p>
+              )}
+              {TIPOS_CON_LINK_A_VENTA.has(m.tipo) && m.numero_ticket && (
+                <Link
+                  href={`/admin/ventas/${m.numero_ticket}`}
+                  className="text-xs text-emerald-600 font-medium mt-1 inline-block hover:underline"
+                >
+                  Ver venta #{m.numero_ticket} →
+                </Link>
               )}
             </div>
           ))}

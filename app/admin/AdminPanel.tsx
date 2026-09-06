@@ -417,16 +417,12 @@ export default function AdminPanel({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    {esAdmin ? (
-                      <Link
-                        href={`/admin/productos/${producto.id}/historial`}
-                        className="font-semibold text-gray-900 text-sm truncate hover:underline"
-                      >
-                        {producto.Nombre}
-                      </Link>
-                    ) : (
-                      <h2 className="font-semibold text-gray-900 text-sm truncate">{producto.Nombre}</h2>
-                    )}
+                    <Link
+                      href={`/admin/productos/${producto.id}/historial`}
+                      className="font-semibold text-gray-900 text-sm truncate hover:underline"
+                    >
+                      {producto.Nombre}
+                    </Link>
                     {producto.Categoria && (
                       <span className="text-[10px] bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 whitespace-nowrap">
                         {producto.Categoria}
