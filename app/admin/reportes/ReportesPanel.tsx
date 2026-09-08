@@ -150,7 +150,7 @@ export default function ReportesPanel({
     <div className="max-w-5xl mx-auto p-4 sm:p-6">
       <h1 className="text-2xl font-bold mb-4">Reportes</h1>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-6">
         <button
           onClick={() => setTab('ventas')}
           className={`px-4 py-2 rounded text-sm font-medium ${tab === 'ventas' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}
@@ -169,6 +169,12 @@ export default function ReportesPanel({
         >
           Turnos
         </button>
+        <Link
+          href="/admin/reportes/perdidas"
+          className="px-4 py-2 rounded text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
+        >
+          Panel de Pérdidas
+        </Link>
       </div>
 
       {tab === 'ventas' && (
