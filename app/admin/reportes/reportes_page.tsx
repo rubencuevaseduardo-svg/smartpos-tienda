@@ -13,7 +13,7 @@ export default async function ReportesPage() {
   const supabase = await createClient()
   const { data: productos } = await supabase
     .from('productos')
-    .select('id, Nombre, Stock, Categoria, Activo, Precio')
+    .select('id, Nombre, Stock, Categoria, Activo, Precio, costo_actual')
     .eq('Comerciante_id', usuarioActual.comercianteId)
 
   // Mapa usuario_id -> nombre, para mostrar quién hizo cada ajuste/movimiento
