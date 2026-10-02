@@ -741,10 +741,10 @@ export default function POSPanel({
             />
           </div>
 
-          {/* Grilla de productos */}
+                   {/* Grilla de productos */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
             gap: 12,
           }}>
             {productosFiltrados.map((p) => {
@@ -765,6 +765,10 @@ export default function POSPanel({
                     cursor: sinStock ? 'not-allowed' : 'pointer',
                     opacity: sinStock ? 0.45 : 1,
                     position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center',
                   }}>
                   {/* Imagen */}
                   <div style={{
@@ -779,7 +783,7 @@ export default function POSPanel({
                         alt={p.Nombre}
                         fill
                         style={{ objectFit: 'cover' }}
-                        sizes="140px"
+                        sizes="(max-width: 768px) 50vw, 200px"
                       />
                     ) : (
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1.5">
@@ -801,7 +805,7 @@ export default function POSPanel({
                     )}
                   </div>
                   {/* Info */}
-                  <div style={{ padding: '8px 10px 10px' }}>
+                  <div style={{ padding: '8px 10px 12px', width: '100%' }}>
                     <div style={{
                       fontSize: 12, fontWeight: 500,
                       color: 'var(--color-text-primary)',
@@ -810,14 +814,14 @@ export default function POSPanel({
                     }}>
                       {p.Nombre}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#1D9E75' }}>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: '#1D9E75', lineHeight: 1.2 }}>
                       {fmt(p.Precio)}
                     </div>
                     <div style={{
-                      fontSize: 11, marginTop: 2,
-                      color: sinStock ? '#E24B4A' : stockActual <= 3 ? '#BA7517' : 'var(--color-text-tertiary)',
+                      fontSize: 11, marginTop: 3,
+                      color: 'var(--color-text-tertiary)',
                     }}>
-                      {sinStock ? 'Sin stock' : stockActual <= 3 ? `¡Últimas ${stockActual}!` : `${stockActual} en stock`}
+                      {sinStock ? 'Sin stock' : `${stockActual} en stock`}
                     </div>
                   </div>
                 </div>
