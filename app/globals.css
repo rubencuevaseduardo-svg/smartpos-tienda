@@ -4,6 +4,21 @@
   --background: #ffffff;
   --foreground: #171717;
 }
+:root {
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f4f4f2;
+  --color-background-tertiary: #f0f0ed;
+
+  --color-border-tertiary: #e3e3df;
+  --color-border-secondary: #cfcfca;
+
+  --color-text-primary: #171717;
+  --color-text-secondary: #555555;
+  --color-text-tertiary: #8a8a85;
+
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+}
 
 @theme inline {
   --color-background: var(--background);
